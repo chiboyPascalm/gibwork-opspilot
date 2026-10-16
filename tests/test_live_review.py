@@ -1,6 +1,6 @@
 import unittest
 
-from live_review import review_task
+from live_review import review_task, build_report, analyze_reward
 
 
 class LiveReviewTests(unittest.TestCase):
@@ -101,6 +101,53 @@ class LiveReviewTests(unittest.TestCase):
             "Check the deadline directly" in item
             for item in result["checks"]
         ))
+
+
+    def test_reward_extraction_avoids_inventing_individual_reward(self):
+        result = analyze_reward(
+            "Task pool is 100 USDC. Check the rules before participating."
+        )
+        self.assertEqual(
+            result["advertised_reward"],
+            "Individual reward not established from description",
+        )
+
+    def test_explicit_reward_is_flagged_for_verification(self):
+        result = analyze_reward(
+            "The base reward is $25. Earn $1.50 per 1,000 video views."
+        )
+        self.assertIn("$25 base reward", result["advertised_reward"])
+        self.assertEqual(
+            result["advertised_reward"].count("performance-based"), 1
+        )
+
+    def test_report_flags_similar_titles_without_removing_listings(self):
+        report = build_report([
+            {"id": "a", "title": "Create a Gibwork Mobile App Thread",
+             "open": True, "slots_remaining": 3, "description": ""},
+            {"id": "b", "title": "Create a Gibwork Mobile App Thread!",
+             "open": True, "slots_remaining": 2, "description": ""},
+        ], "production")
+        self.assertEqual(report["count"], 2)
+        self.assertTrue(any(
+            task["possible_duplicates"] for task in report["tasks"]
+        ))
+
+    def test_priority_and_review_rank_are_present(self):
+        report = build_report([
+            {"id": "a", "title": "Unknown slots", "open": True,
+             "slots_remaining": None, "description": ""},
+            {"id": "b", "title": "Available listing", "open": True,
+             "slots_remaining": 3, "description": "",
+             "deadline": "2999-01-01T00:00:00Z"},
+        ], "production")
+        for task in report["tasks"]:
+            self.assertIn("priority_score", task)
+            self.assertIn("priority_reasons", task)
+            self.assertIn("review_rank", task)
+        self.assertEqual(
+            sorted(task["review_rank"] for task in report["tasks"]), [1, 2]
+        )
 
 
 if __name__ == "__main__":
