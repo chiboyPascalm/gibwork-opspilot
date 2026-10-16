@@ -130,3 +130,30 @@ The integration tests mock CLI responses. They verify wrapper behaviour without 
 ## Project goal
 
 Provide a practical, auditable workflow for reviewing opportunities before committing time or resources, with clear status reporting and portable artifacts.
+
+## Live opportunity review
+
+Run the read-only Gibwork opportunity reviewer:
+
+    python live_review.py --environment production --limit 5
+
+Use the staging environment when appropriate:
+
+    python live_review.py --environment stage --limit 5
+
+The reviewer checks listing status, deadlines, reported submission slots,
+premium-access requirements, and follower eligibility. Missing information
+requires manual verification.
+
+Add `--save` to export timestamped JSON and Markdown reports into `reports/`:
+
+    python live_review.py --environment production --limit 5 --save
+
+The reviewer does not submit tasks or make wallet transactions.
+
+## Run tests
+
+    python -m pytest -q
+
+The tests cover task tracking, preflight checks, Gibwork integration,
+and live opportunity review.

@@ -3,11 +3,92 @@
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
+from html import unescape
+from html.parser import HTMLParser
 
 
-def discover_tasks(limit=3):
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        text = data.strip()
+        if text:
+            self.parts.append(text)
+
+    def text(self):
+        return " ".join(self.parts)
+
+
+def plain_text(value):
+    if not isinstance(value, str):
+        return ""
+    parser = _TextExtractor()
+    try:
+        parser.feed(value)
+        return unescape(parser.text())
+    except Exception:
+        return unescape(value)
+
+
+def summarize_tasks(payload):
+    """Summarize API task fields without guessing reward amounts."""
+    if not isinstance(payload, dict):
+        return []
+
+    data = payload.get("data", payload)
+    if isinstance(data, dict):
+        items = data.get("results", data.get("tasks", []))
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+
+    if not isinstance(items, list):
+        return []
+
+    summaries = []
+    for task in items:
+        if not isinstance(task, dict):
+            continue
+
+        participation = task.get("participationRequirements") or {}
+        if not isinstance(participation, dict):
+            participation = {}
+
+        asset = task.get("asset") or {}
+        if not isinstance(asset, dict):
+            asset = {}
+
+        summaries.append({
+            "id": task.get("id"),
+            "slug": task.get("slug"),
+            "title": task.get("title") or "Untitled task",
+            "status": task.get("status"),
+            "open": task.get("isOpen"),
+            "deadline": task.get("deadline"),
+            "tags": task.get("tags") or [],
+            "requires_premium": task.get("requiresPremium"),
+            "slots_remaining": task.get("standardSubmissionSlotsRemaining"),
+            "minimum_twitter_followers": participation.get("minTwitterFollowers"),
+            "asset_symbol": asset.get("symbol"),
+            "description": plain_text(task.get("content", "")),
+            "reward_note": (
+                "Check the task description and submission rules. "
+                "The API asset amount may represent the task pool, "
+                "so it is not treated as an individual reward."
+            ),
+            "raw_task": task,
+        })
+
+    return summaries
+
+
+def discover_tasks(limit=3, environment="stage"):
     """Request available Gibwork tasks without modifying anything."""
     if not 1 <= limit <= 100:
         return {
@@ -16,6 +97,16 @@ def discover_tasks(limit=3):
             "error": {
                 "code": "INVALID_LIMIT",
                 "message": "Limit must be between 1 and 100.",
+            },
+        }
+
+    if environment not in ("stage", "production"):
+        return {
+            "ok": False,
+            "mode": "live_cli",
+            "error": {
+                "code": "INVALID_ENVIRONMENT",
+                "message": "Environment must be stage or production.",
             },
         }
 
@@ -30,9 +121,17 @@ def discover_tasks(limit=3):
         }
 
     command = [
-        "npx", "--yes", "@gibwork/cli", "--json",
-        "task", "available", "--limit", str(limit),
+        "npx", "--yes", "@gibwork/cli",
+        "--profile", "stage",
     ]
+    if environment == "production":
+        command.extend(["--environment", "production"])
+
+    command.extend(["--json", "task", "available", "--limit", str(limit)])
+
+    keypair_path = os.environ.get("GIBWORK_KEYPAIR_PATH")
+    if keypair_path:
+        command.extend(["--keypair", keypair_path])
 
     try:
         completed = subprocess.run(
@@ -91,13 +190,14 @@ def discover_tasks(limit=3):
 
         if code == "CREDENTIAL_ERROR":
             message = (
-                "No Gibwork wallet is configured. Live discovery is "
-                "unavailable; no wallet was created or changed."
+                "No Gibwork wallet is configured for the selected "
+                "profile. No wallet was created or changed."
             )
 
         return {
             "ok": False,
             "mode": "live_cli",
+            "environment": environment,
             "error": {"code": code, "message": message},
         }
 
@@ -105,6 +205,7 @@ def discover_tasks(limit=3):
         return {
             "ok": False,
             "mode": "live_cli",
+            "environment": environment,
             "error": {
                 "code": "CLI_FAILED",
                 "message": "The Gibwork CLI returned a failure status.",
@@ -114,7 +215,13 @@ def discover_tasks(limit=3):
     return {
         "ok": True,
         "mode": "live_cli",
+        "environment": environment,
         "result": payload,
+        "tasks": summarize_tasks(payload),
+        "notice": (
+            "Read-only discovery. Review eligibility, task rules, available "
+            "slots, and reward terms on Gibwork before acting."
+        ),
     }
 
 
@@ -153,6 +260,12 @@ def main():
         help="Read available tasks through the Gibwork CLI",
     )
     live.add_argument("--limit", type=int, default=3)
+    live.add_argument(
+        "--environment",
+        choices=("stage", "production"),
+        default="stage",
+        help="Gibwork API environment (default: stage)",
+    )
 
     commands.add_parser(
         "demo",
@@ -162,7 +275,7 @@ def main():
     args = parser.parse_args()
 
     if args.action == "discover":
-        result = discover_tasks(args.limit)
+        result = discover_tasks(args.limit, args.environment)
     else:
         result = offline_demo()
 

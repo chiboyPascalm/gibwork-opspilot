@@ -27,6 +27,32 @@ class GibworkIntegrationTests(unittest.TestCase):
         self.assertNotIn("refund", command)
         self.assertEqual(run.call_args.kwargs["timeout"], 45)
 
+
+    @patch("gibwork_integration.shutil.which", return_value="/usr/bin/npx")
+    @patch("gibwork_integration.subprocess.run")
+    def test_configured_keypair_path_is_passed_explicitly(self, run, _which):
+        run.return_value = SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"ok": True, "data": {"results": []}}),
+            stderr="",
+        )
+
+        with patch.dict(
+            "os.environ",
+            {"GIBWORK_KEYPAIR_PATH": "/tmp/test-wallet.json"},
+        ):
+            result = gibwork_integration.discover_tasks(2)
+
+        self.assertTrue(result["ok"])
+        command = run.call_args.args[0]
+        self.assertIn("--keypair", command)
+        self.assertEqual(
+            command[command.index("--keypair") + 1],
+            "/tmp/test-wallet.json",
+        )
+        self.assertIn("available", command)
+        self.assertNotIn("create", command)
+
     @patch("gibwork_integration.shutil.which", return_value="/usr/bin/npx")
     @patch("gibwork_integration.subprocess.run")
     def test_missing_wallet_is_reported_safely(self, run, _which):
