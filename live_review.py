@@ -40,12 +40,18 @@ def analyze_reward(description):
         r'(?i)([$€£]\s?\d[\d,]*(?:\.\d{1,2})?'
         r'|\d[\d,]*(?:\.\d{1,2})?\s*(?:USDC|USDT|USD|SOL))'
         r'\s*(?:USDC|USDT|USD|SOL)?\s*'
-        r'(?:each|per\s+(?:approved\s+)?submission|'
-        r'per\s+approved\s+entry)',
+        r'(?P<unit>each|per\s+(?:approved\s+)?submission|'
+        r'per\s+approved\s+entry|per\s+approved\s+meme)',
         description,
     ):
         amount = re.sub(r'\s+', '', match.group(1))
-        item = amount + " per submission (advertised)"
+        unit = re.sub(r'\s+', ' ', match.group("unit").lower()).strip()
+        label = (
+            "per approved meme"
+            if unit == "per approved meme"
+            else "per submission"
+        )
+        item = amount + " " + label + " (advertised)"
         if item not in found:
             found.append(item)
 

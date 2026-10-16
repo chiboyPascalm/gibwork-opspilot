@@ -112,6 +112,23 @@ class LiveReviewTests(unittest.TestCase):
             "Individual reward not established from description",
         )
 
+    def test_approved_meme_reward_is_separate_from_pool(self):
+        result = analyze_reward(
+            "Pay: 1.00 USDC per approved meme. Pool is 10 USDC."
+        )
+        self.assertIn(
+            "1.00USDC per approved meme (advertised)",
+            result["advertised_reward"],
+        )
+        self.assertNotIn(
+            "10USDC per approved meme",
+            result["advertised_reward"],
+        )
+        self.assertEqual(
+            result["reward_confidence"],
+            "description_match_needs_verification",
+        )
+
     def test_explicit_reward_is_flagged_for_verification(self):
         result = analyze_reward(
             "The base reward is $25. Earn $1.50 per 1,000 video views."

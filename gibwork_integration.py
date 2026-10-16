@@ -120,18 +120,20 @@ def discover_tasks(limit=3, environment="stage"):
             },
         }
 
+    # Global CLI options must appear before the task subcommand.
+    # Use the verified environment selection rather than forcing a profile.
     command = [
         "npx", "--yes", "@gibwork/cli",
-        "--profile", "stage",
+        "--environment", environment,
     ]
-    if environment == "production":
-        command.extend(["--environment", "production"])
-
-    command.extend(["--json", "task", "available", "--limit", str(limit)])
 
     keypair_path = os.environ.get("GIBWORK_KEYPAIR_PATH")
     if keypair_path:
         command.extend(["--keypair", keypair_path])
+
+    command.extend([
+        "--json", "task", "available", "--limit", str(limit),
+    ])
 
     try:
         completed = subprocess.run(
