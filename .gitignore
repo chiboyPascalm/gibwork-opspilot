@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*keypair*
+*private-key*
+*.pem
+*.key
+
+# Local records and generated reports
+data/*.json
+data/*.json.tmp
+reports/*
+!reports/.gitkeep
+
+# Local CLI diagnostics
+gibwork-cli-out.txt
+gibwork-cli-err.txt
+
+# Local backups
+*.before-*
+*.backup-*
